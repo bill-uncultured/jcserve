@@ -11,8 +11,8 @@ import (
 )
 
 // Global so we can call the shutdown from a handler
-// Could be done with OS signals instead, to avoid global
 var server *http.Server
+var shuttingDown bool
 
 // Put the shared data with the mutex
 type connCounter struct {
@@ -21,7 +21,6 @@ type connCounter struct {
 	mux sync.Mutex
 }
 // Global data & mutex, because http handlers only get 2 args.
-// Maybe could add arguments to handlers somehow, or otherwise avoid global
 var ccounter connCounter
 
 // upCounter increments current & total shared counters
@@ -46,6 +45,11 @@ func downCounter() {
 
 // hashHandler is the http handler for /hash
 func hashHandler(w http.ResponseWriter, r *http.Request) {
+	if shuttingDown {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("503 - Service Unavailable - shutting down"))
+		return
+	}
 	upCounter()
 	r.ParseForm()
 	password := r.FormValue("password")
@@ -62,23 +66,16 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 
 // getShutdownWait: whether we should wait to shut down
 func getShutdownWait(tries int) bool {
-	shutdownTimeout := 10  // seconds
+	shutdownTimeout := 15  // seconds
 	ccounter.mux.Lock()
 	wait := (tries <= shutdownTimeout) && (ccounter.current > 0)
 	ccounter.mux.Unlock()
 	return wait
 }
 
-// shutdownHandler is the http handler for /shutdown
-func shutdownHandler(w http.ResponseWriter, r *http.Request) {
-	// Problem 1: server.Shutdown aborts connections, despite docs to the contrary. Need different context?
-	//   So we just watch the counters before shutting down.
-	// Problem 2: We don't prevent new connections before stopping, so if things keep connecting, we'll
-	//   never stop. To fix that, fix Problem 1, or stop accepting new connections, or just have a timeout
-	//   and drop the hammer (not ideal).
-	// Problem 3: The response never finishes. Maybe an OS signal based handler would take care of that.
-	// Maybe we could do a notification system rather than polling.
-	w.Write([]byte("Shutting down"))
+// shutdownServer shuts down the server
+func shutdownServer() {
+	shuttingDown = true
 	tries := 0
 	wait := getShutdownWait(tries)
 	for wait {
@@ -89,8 +86,15 @@ func shutdownHandler(w http.ResponseWriter, r *http.Request) {
 	server.Shutdown(context.Background())
 }
 
+// shutdownHandler is the http handler for /shutdown
+func shutdownHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Shutting down"))
+	go shutdownServer()
+}
+
 // startServer starts the server
 func startServer() {
+	shuttingDown = false
 	http.HandleFunc("/hash", hashHandler)
 	http.HandleFunc("/shutdown", shutdownHandler)
 	server = &http.Server {
