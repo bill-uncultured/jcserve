@@ -1,14 +1,13 @@
 package jchash
 
-import "fmt"
 import "testing"
 
-type HashPair struct {
+type hashPair struct {
 	password, hash512 string
 }
 
 // Expected hashes calculated at https://hash.online-convert.com/sha512-generator
-var HashPairArray = []hashPair{
+var hashPairArray = []hashPair{
 	hashPair{
 		password: "angryMonkey",
 		hash512:  "ZEHhWB65gUlzdVwtDQArEyx+KVLzp/aTaRaPlBzYRIFj6vjFdqEb0Q5B8zVKCZ0vKbZPZklJz0Fd7su2A+gf7Q==",
@@ -28,12 +27,12 @@ func TestHashPassword(t *testing.T) {
 	for _, pair := range hashPairArray {
 		result := HashPassword(pair.password)
 		if pair.hash512 != result {
-			t.Error(fmt.Sprintf("Got wrong hash for password %s", pair.password))
+			t.Error("Got wrong hash for password: ", pair.password)
 		}
 	}
 	// Negative case
 	result := HashPassword(badPair.password)
 	if badPair.hash512 == result {
-		t.Error(fmt.Sprintf("Deliberate bad hash appears to match: %s", badPair.password))
+		t.Error("Deliberate bad hash appears to match: ", badPair.password)
 	}
 }
