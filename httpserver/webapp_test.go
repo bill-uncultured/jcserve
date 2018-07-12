@@ -1,12 +1,10 @@
 package main
 
 import (
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -40,8 +38,11 @@ func TestHashPass(t *testing.T) {
 func TestNoPass(t *testing.T) {
 	resp, err := http.PostForm(hashUrl, url.Values{})
 	if err != nil {
-		body, _ := ioutil.ReadAll(resp.Body)
-		t.Error("Error: got success when expected error: ", string(body))
+		t.Error("Error connecting password request: ", err)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Error("Error: did not get expected error: ", resp.StatusCode, string(body))
 	}
 }
 
